@@ -70,7 +70,6 @@ let sps_struct = {
   "vui_parameters_present_flag": 0,
   "sps_extension_flag": 0
 }
-
 let pps_struct = {
   "pps_pic_parameter_set_id": 0,
   "pps_seq_parameter_set_id": 0,
