@@ -99,6 +99,80 @@ let pps_struct = {
   "slice_segment_header_extension_present_flag": 0,
   "pps_extension_flag": 0
 }
+document.getElementById("upload").addEventListener("change", handleFileUpload);
+document.getElementById("download").addEventListener("click", downloadUpdatedFile);
+
+let originalBuffer;
+let parsedNALs = [];
+
+function handleFileUpload(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        originalBuffer = new Uint8Array(e.target.result);
+        parsedNALs = parseNALUnits(originalBuffer);
+        displayNALFields(parsedNALs);
+    };
+    reader.readAsArrayBuffer(file);
+}
+
+function parseNALUnits(buffer) {
+    let nalUnits = [];
+    let i = 0;
+    
+    while (i < buffer.length - 4) {
+        if (buffer[i] === 0x00 && buffer[i+1] === 0x00 && buffer[i+2] === 0x01) {
+            let start = i + 3;
+            i += 3;
+            while (i < buffer.length - 3 && !(buffer[i] === 0x00 && buffer[i+1] === 0x00 && buffer[i+2] === 0x01)) {
+                i++;
+            }
+            let nalUnit = buffer.slice(start, i);
+            let nalType = nalUnit[0] & 0x7E >> 1;
+            nalUnits.push({ type: nalType, data: nalUnit, parsed: parseNALData(nalType, nalUnit) });
+        } else {
+            i++;
+        }
+    }
+
+    return nalUnits;
+}
+
+function parseNALData(type, data) {
+    let parsed = {};
+    switch (type) {
+        case 32: parsed = parseVPS(data); break;
+        case 33: parsed = parseSPS(data); break;
+        case 34: parsed = parsePPS(data); break;
+        default: parsed = { raw: data };
+    }
+    return parsed;
+}
+
+function parseVPS(data) {
+    return {
+        vps_video_parameter_set_id: (data[0] & 0x0F),
+        vps_max_layers_minus1: (data[1] >> 4) & 0x1F,
+        vps_max_sub_layers_minus1: data[1] & 0x07,
+        vps_temporal_id_nesting_flag: (data[1] >> 7) & 0x01,
+        vps_max_layer_id: data[2] & 0x3F,
+        vps_num_layer_sets_minus1: data[3],
+        vps_extension_flag: data[4] & 0x01
+    };
+}
+
+function parseSPS(data) {
+    return {
+        sps_seq_parameter_set_id: data[0] & 0x0F,
+        sps_max_sub_layers_minus1: (data[0] >> 4) & 0x07,
+        profile_idc: data[1],
+        level_idc: data[12],
+        chroma_format_idc: data[13] & 0x03,
+        bit_depth_luma_minus8: (data[14] >> 3) & 0x07,
+        bit_depth_chroma_minus8: data[14] & 0x07,
+        log2_max_pic_order_cnt_lsb_minus4: data[15] & 0x0F,
         width: ((data[3] & 0x0F) << 8) | data[4],
         height: ((data[5] & 0x0F) << 8) | data[6],
         sps_extension_flag: data[17] & 0x01
